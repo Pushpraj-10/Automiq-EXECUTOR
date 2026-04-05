@@ -15,7 +15,7 @@ function asNumber(name: string, value: string | undefined, fallback: number) {
 export const config = {
   nodeEnv: (process.env.NODE_ENV || 'development') as 'development' | 'production' | 'test',
   port: asNumber('EXECUTOR_PORT', process.env.EXECUTOR_PORT, 4001),
-  mongodbUri: required('MONGODB_URI', process.env.MONGODB_URI || process.env.DATABASE_URL),
+  mongodbUri: required('MONGODB_URI', process.env.MONGODB_URI),
   mongodbDbName: process.env.MONGODB_DB_NAME || 'automiq',
   executorGrpcBind: process.env.EXECUTOR_GRPC_BIND || '0.0.0.0:50051',
   backendGrpcAddress: process.env.BACKEND_GRPC_ADDRESS || '127.0.0.1:50052',
