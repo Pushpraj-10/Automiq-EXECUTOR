@@ -1,4 +1,5 @@
 import * as grpc from '@grpc/grpc-js';
+import fs from 'node:fs';
 import config from '../../config/env.js';
 import logger from '../../utils/logger.js';
 import loadDispatcherProto from './dispatch.grpc.shared.js';
@@ -119,7 +120,7 @@ export async function startExecutorGrpcServer() {
   });
 
   await new Promise<void>((resolve, reject) => {
-    grpcServer!.bindAsync(config.executorGrpcBind, grpc.ServerCredentials.createInsecure(), (error, _port) => {
+    grpcServer!.bindAsync(config.executorGrpcBind, createExecutorServerCredentials(), (error, _port) => {
       if (error) return reject(error);
       resolve();
     });
@@ -166,6 +167,45 @@ function safeParseJson(value: string | undefined) {
 
 function isAuthorized(sharedSecret: string | undefined) {
   return Boolean(sharedSecret) && sharedSecret === config.executorSharedSecret;
+}
+
+function createExecutorServerCredentials() {
+  if (!config.executorGrpcTlsEnabled) {
+    return grpc.ServerCredentials.createInsecure();
+  }
+
+  const serverCert = loadRequiredFile('EXECUTOR_GRPC_SERVER_CERT_PATH', config.executorGrpcServerCertPath);
+  const serverKey = loadRequiredFile('EXECUTOR_GRPC_SERVER_KEY_PATH', config.executorGrpcServerKeyPath);
+  const rootCert = loadOptionalFile(config.executorGrpcCaCertPath);
+
+  if (config.executorGrpcMtlsEnabled && !rootCert) {
+    throw new Error('EXECUTOR_GRPC_CA_CERT_PATH is required when EXECUTOR_GRPC_MTLS_ENABLED=true');
+  }
+
+  return grpc.ServerCredentials.createSsl(
+    rootCert ?? null,
+    [{
+      cert_chain: serverCert,
+      private_key: serverKey,
+    }],
+    config.executorGrpcMtlsEnabled,
+  );
+}
+
+function loadRequiredFile(name: string, filePath: string) {
+  const normalized = (filePath || '').trim();
+  if (!normalized) {
+    throw new Error(`${name} is required when gRPC TLS is enabled`);
+  }
+
+  return fs.readFileSync(normalized);
+}
+
+function loadOptionalFile(filePath: string | undefined) {
+  if (!filePath) return undefined;
+  const normalized = filePath.trim();
+  if (!normalized) return undefined;
+  return fs.readFileSync(normalized);
 }
 
 export default {
