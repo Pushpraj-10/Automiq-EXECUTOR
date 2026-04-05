@@ -116,4 +116,65 @@ describe('ExecutionService integration behavior', () => {
       expect.objectContaining({ status: 'succeeded' }),
     );
   });
+
+  it('continues execution when step fails with continue strategy', async () => {
+    const timeoutSpy = vi
+      .spyOn(global, 'setTimeout')
+      .mockImplementation(((handler: any) => {
+        if (typeof handler === 'function') handler();
+        return 0 as any;
+      }) as any);
+
+    const repo = {
+      getExecutionWithWorkflowDefinition: vi.fn().mockResolvedValue({
+        id: 'exec_3',
+        tenantId: 'tenant_3',
+        correlationId: 'corr_3',
+        status: 'queued',
+        attemptCount: 0,
+        workflowVersionDefinition: {
+          steps: [
+            {
+              id: 'step_1',
+              stepIndex: 1,
+              type: 'delay',
+              config: { durationMs: 0 },
+              onFailure: { strategy: 'continue', maxAttempts: 1 },
+            },
+            {
+              id: 'step_2',
+              stepIndex: 2,
+              type: 'delay',
+              config: { durationMs: 1 },
+            },
+          ],
+        },
+      }),
+      markExecutionRunning: vi.fn().mockResolvedValue(undefined),
+      insertStepLog: vi.fn().mockResolvedValue(undefined),
+      finalizeExecution: vi.fn().mockResolvedValue(undefined),
+    } as any;
+
+    const service = new ExecutionService(repo);
+
+    await service.processJob({
+      id: 'job_3',
+      executionId: 'exec_3',
+      tenantId: 'tenant_3',
+      status: 'processing',
+      retryCount: 0,
+      availableAt: new Date().toISOString(),
+    });
+
+    expect(repo.insertStepLog).toHaveBeenCalledTimes(2);
+    expect(repo.finalizeExecution).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'succeeded' }),
+    );
+
+    expect(reportExecutionStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'succeeded' }),
+    );
+
+    timeoutSpy.mockRestore();
+  });
 });

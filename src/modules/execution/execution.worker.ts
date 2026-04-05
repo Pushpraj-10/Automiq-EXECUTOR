@@ -3,6 +3,7 @@ import config from '../../config/env.js';
 import executionRepository from './execution.repository.js';
 import executionService from './execution.service.js';
 import logger from '../../utils/logger.js';
+import { reportExecutionStatus } from '../dispatch/dispatcher.grpc.client.js';
 
 export class ExecutionWorker {
   private readonly lockOwner = `executor-${randomUUID()}`;
@@ -63,6 +64,20 @@ export class ExecutionWorker {
             status: 'failed',
             errorSummary: error?.message || 'Unhandled job processing error',
           });
+
+          try {
+            await reportExecutionStatus({
+              executionId: job.executionId,
+              status: 'failed',
+              errorSummary: error?.message || 'Unhandled job processing error',
+            });
+          } catch (reportError: any) {
+            logger.warn('Failed reporting unexpected worker failure to backend', {
+              queueJobId: job.id,
+              executionId: job.executionId,
+              error: reportError?.message || 'Unknown report error',
+            });
+          }
         }
       }
     } finally {

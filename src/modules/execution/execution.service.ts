@@ -41,6 +41,7 @@ export class ExecutionService {
       const step = execution.workflowVersionDefinition.steps[i] as WorkflowStep;
       const stepIndex = Number((step as any).stepIndex || i + 1);
       const maxAttempts = Math.max(1, Math.min(step.onFailure?.maxAttempts || DEFAULT_MAX_ATTEMPTS, 10));
+      const strategy = step.onFailure?.strategy || 'stop';
 
       let lastResult: StepExecutionResult = { success: false, error: 'Step was not executed' };
 
@@ -89,6 +90,16 @@ export class ExecutionService {
       }
 
       if (!lastResult.success) {
+        if (strategy === 'continue') {
+          logger.warn('Step failed and continued due to onFailure strategy', {
+            executionId: execution.id,
+            stepIndex,
+            stepType: step.type,
+            error: lastResult.error || undefined,
+          });
+          continue;
+        }
+
         await this.repo.finalizeExecution({
           executionId: execution.id,
           queueJobId: job.id,
